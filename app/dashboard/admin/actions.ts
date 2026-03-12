@@ -37,7 +37,8 @@ export async function handleAdminAction(prevState: ActionState | null, formData:
           name: name,
           role: 'property_admin',
           company_id: company_id,
-          company_name: company_name
+          company_name: company_name,
+          created_at: new Date().toISOString()
         })
 
       if (profileError) {
@@ -62,4 +63,51 @@ export async function handleAdminAction(prevState: ActionState | null, formData:
     revalidatePath('/dashboard/admin/invite')
     return { success: true, message: `邀請信已發送至 ${email}` }
   }
+}
+
+// 刪除管理員
+export async function deletePropertyAdmin(adminId: string) {
+  // 1. 先刪除 Auth 帳號（這會觸發級聯刪除 profile，如果 SQL 有設定的話）
+  const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(adminId)
+  
+  if (authError) return { success: false, message: authError.message }
+
+  // 2. 確保 Profile 也被刪除 (保險起見)
+  await supabaseAdmin.from('profiles').delete().eq('id', adminId)
+
+  revalidatePath('/dashboard/admin/users')
+  return { success: true, message: '管理員已成功刪除' }
+}
+
+// 編輯管理員資訊
+export async function updatePropertyAdmin(adminId: string, formData: FormData) {
+  const name = formData.get('name') as string
+  const company_name = formData.get('company_name') as string
+  const company_id = formData.get('company_id') as string
+
+  const { error } = await supabaseAdmin
+    .from('profiles')
+    .update({ name, company_name, company_id })
+    .eq('id', adminId)
+
+  if (error) return { success: false, message: error.message }
+
+  revalidatePath('/dashboard/admin/users')
+  return { success: true, message: '資訊已更新' }
+}
+
+// 發送 Email 變更邀請
+export async function sendEmailChangeLink(adminId: string, newEmail: string) {
+  // 這裡使用 admin 權限來觸發 email 更新
+  // Supabase 會自動發送一封驗證信到「新信箱」
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(
+    adminId,
+    { email: newEmail }
+  )
+
+  if (error) {
+    return { success: false, message: '發送失敗：' + error.message }
+  }
+
+  return { success: true, message: '驗證信已發送到新信箱，請通知管理員查收' }
 }

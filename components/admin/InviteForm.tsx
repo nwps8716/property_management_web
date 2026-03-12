@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from 'react'
 import { handleAdminAction } from '@/app/dashboard/admin/actions'
-import { Mail, User, Building, Hash, Key, Send, UserPlus } from 'lucide-react'
+import { Building, Hash, Key, Send, UserPlus } from 'lucide-react'
 import { SubmitButton } from '@/components/ui/SubmitButton'
 
 export function InviteForm() {
