@@ -1,0 +1,641 @@
+# Project Context: Property Management Web Application
+
+## Project Overview
+This is a Next.js 16 property management web application built with TypeScript, featuring authentication, routing middleware, role-based access control (RBAC), and a modern UI with Tailwind CSS. The application uses Supabase for authentication, database, and authorization services.
+
+## Technology Stack
+- **Framework**: Next.js 16.1.6 (App Router)
+- **Language**: TypeScript 5+ (Strict Mode Enabled)
+- **Styling**: Tailwind CSS v4
+- **Authentication**: Supabase SSR (@supabase/ssr)
+- **UI Components**: Custom components with Lucide React icons
+- **Fonts**: Geist Sans & Geist Mono (optimized via next/font)
+- **Package Manager**: npm
+
+## Project Architecture
+
+### Directory Structure
+```
+app/                          # Next.js App Router pages
+├── auth/                     # Authentication-related pages
+│   └── callback/
+├── dashboard/                # Protected dashboard area
+│   ├── admin/                # Admin-specific functionality
+│   │   ├── actions.ts        # Server actions for admin operations
+│   │   ├── invite/           # Invite admin page
+│   │   └── user/             # User management page
+│   ├── set-password/         # Password setup for new users
+│   ├── layout.tsx            # Dashboard layout with sidebar
+│   ├── loading.tsx           # Loading UI
+│   ├── page.tsx              # Dashboard home/overview
+│   └── settings/             # Personal settings (empty, needs implementation)
+├── login/                    # Login page
+│   ├── actions.ts            # Login server action
+│   └── page.tsx              # Login form page
+├── globals.css               # Global styles with Tailwind v4
+├── layout.tsx                # Root layout
+└── page.tsx                  # Home page (redirects to login)
+
+components/                   # Reusable React components
+├── admin/                    # Admin-specific components
+│   ├── AdminTable.tsx        # Data table with edit modal
+│   ├── DeleteButton.tsx      # Delete confirmation button
+│   └── InviteForm.tsx        # Admin invitation form
+├── layout/                   # Layout-related components
+│   └── Sidebar.tsx           # Navigation sidebar (async Server Component)
+└── ui/                       # Generic UI components
+    ├── FormattedDate.tsx     # Date formatting component
+    └── SubmitButton.tsx      # Reusable submit button with loading state
+
+utils/                        # Utility functions
+└── supabase/                 # Supabase client configurations
+    ├── admin.ts              # Admin client with service role
+    ├── client.ts             # Browser/client Supabase client
+    └── server.ts             # Server-side Supabase client
+
+middleware.ts                 # Route protection and session management
+```
+
+## Code Style & Patterns
+
+### TypeScript Configuration
+- **Strict Mode**: Enabled with comprehensive type checking
+- **Target**: ES2017
+- **Module Resolution**: Bundler
+- **Path Aliases**: `@/*` maps to `./*`
+- **JSX**: React JSX transform
+
+### Component Patterns
+
+#### 1. Server Components (Default)
+- Fetch data directly from Supabase
+- Access user session via `createClient()`
+- Handle async data fetching
+- Example: `Sidebar.tsx`, `DashboardPage`
+
+```typescript
+// Example Server Component pattern
+import { createClient } from '@/utils/supabase/server'
+
+export default async function Component() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user?.id)
+    .single()
+  
+  return <div>{profile?.name}</div>
+}
+```
+
+#### 2. Client Components (Explicit with `'use client'`)
+- Used for interactive UI elements
+- Handle form submissions with `useFormStatus()`
+- Manage local state with `useState()`
+- Access search params with `useSearchParams()`
+
+```typescript
+'use client'
+
+import { useState } from 'react'
+import { useFormStatus } from 'react-dom'
+
+export default function ClientComponent() {
+  const [error, setError] = useState<string | null>(null)
+  // ...
+}
+```
+
+#### 3. Server Actions (Marked with `'use server'`)
+- Handle form submissions server-side
+- Perform database mutations
+- Use `revalidatePath()` for cache invalidation
+- Return structured response objects (`ActionState` interface)
+
+```typescript
+'use server'
+
+import { revalidatePath } from 'next/cache'
+
+export interface ActionState {
+  success: boolean;
+  message: string;
+}
+
+export async function actionName(formData: FormData): Promise<ActionState> {
+  // Process form data
+  revalidatePath('/path')
+  return { success: true, message: 'Success message' }
+}
+```
+
+### Styling Conventions
+
+#### Color Palette
+- **Primary**: Indigo (`indigo-600`, `indigo-500`, `indigo-400`)
+- **Background**: Gray/Slate (`bg-gray-50`, `bg-slate-900`)
+- **Accents**: 
+  - Red for destructive actions (`text-red-600`, `hover:bg-red-500/10`)
+  - Amber for warnings (`bg-amber-50`, `text-amber-700`)
+  - Green for success states (`text-green-600`)
+- **Text**: Slate scale (`text-slate-900` to `text-slate-400`)
+
+#### Component Styling Patterns
+
+**Cards**:
+```
+bg-white rounded-xl shadow-sm border border-slate-200
+```
+
+**Buttons**:
+```
+// Primary (Indigo)
+px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium
+
+// Secondary/Danger (Red)
+text-red-600 hover:text-red-900 font-medium
+
+// Text button
+px-4 py-2 text-indigo-600 hover:text-indigo-900 font-medium
+```
+
+**Inputs**:
+```
+block w-full rounded-lg border-gray-300 bg-gray-50 px-4 py-3 
+text-gray-900 focus:border-indigo-500 focus:ring-indigo-500 
+sm:text-sm transition-colors
+```
+
+**Tables**:
+```
+// Container
+bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden
+
+// Header
+bg-slate-50 border-b border-slate-200 px-6 py-4 text-sm font-semibold text-slate-600
+
+// Row
+hover:bg-slate-50 transition-colors divide-y divide-slate-200
+```
+
+#### Responsive Design
+- Mobile-first approach
+- Common breakpoints: `sm:`, `md:`, `lg:`
+- Layout: `flex-col` mobile, `sm:flex-row` desktop
+- Grid: `grid-cols-1` mobile, `sm:grid-cols-2 lg:grid-cols-3` desktop
+
+### Authentication & Authorization Flow
+
+#### 1. Middleware Protection (`middleware.ts`)
+```typescript
+// Route guarding logic
+const isAuthPage = pathname === '/login' || pathname.startsWith('/auth')
+
+// Redirect unauthenticated users
+if (!user && !isAuthPage) {
+  const url = new URL('/login', request.url)
+  url.searchParams.set('next', pathname)
+  return NextResponse.redirect(url)
+}
+```
+
+#### 2. Session Management
+- **Server**: `createClient()` from `@/utils/supabase/server`
+- **Client**: `createClient()` from `@/utils/supabase/client`
+- **Admin**: `supabaseAdmin` for privileged operations
+
+#### 3. Role-Based Access Control
+- `super_admin`: Full system access, can manage other admins
+- `property_admin`: Limited access to property management features
+- Role determined from `profiles` table
+
+### Form Handling Patterns
+
+#### Server Action with FormData
+```typescript
+export async function actionName(formData: FormData): Promise<ActionState> {
+  const field = formData.get('fieldName') as string
+  // Validation and processing
+  return { success: boolean, message: string }
+}
+```
+
+#### Client-Side Form Wrapper
+```typescript
+async function clientAction(formData: FormData) {
+  setError(null)
+  const result = await serverAction(formData)
+  if (result?.error) setError(result.error)
+}
+```
+
+#### SubmitButton Component Usage
+```typescript
+import { SubmitButton } from '@/components/ui/SubmitButton'
+
+// Basic usage
+<SubmitButton label="登入系統" loadingLabel="正在驗證身份..." />
+
+// With custom className
+<SubmitButton 
+  label="儲存變更"
+  loadingLabel="儲存中..."
+  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg"
+/>
+```
+
+### Database Schema (Inferred)
+
+**profiles table**:
+| Column | Type | Description |
+|--------|------|-------------|
+| id | UUID | References auth.users |
+| name | string | User's display name |
+| email | string | User's email address |
+| company_name | string | Organization name |
+| company_id | string | Organization identifier |
+| role | string | 'super_admin' or 'property_admin' |
+| created_at | timestamp | Creation timestamp |
+| updated_at | timestamp | Last update timestamp |
+
+### File Naming Conventions
+- **PascalCase**: React components (`AdminTable.tsx`, `SubmitButton.tsx`)
+- **kebab-case**: Directories and utility files (`set-password/`, `server.ts`)
+- **camelCase**: Functions and variables (`createClient`, `updateSession`)
+- **Comments**: English for code comments, Traditional Chinese for UI text
+
+### Import Patterns
+
+#### External Libraries
+```typescript
+import { useState } from 'react'
+import { createServerClient } from '@supabase/ssr'
+import { User, Mail, Building2 } from 'lucide-react'
+import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
+```
+
+#### Internal Imports
+```typescript
+// Components
+import { SubmitButton } from '@/components/ui/SubmitButton'
+import { AdminTable } from '@/components/admin/AdminTable'
+import Sidebar from '@/components/layout/Sidebar'
+
+// Utilities
+import { createClient } from '@/utils/supabase/server'
+import { supabaseAdmin } from '@/utils/supabase/admin'
+
+// Actions
+import { handleAdminAction } from '@/app/dashboard/admin/actions'
+import { login } from '@/app/login/actions'
+```
+
+### Error Handling Patterns
+
+#### Server Actions
+```typescript
+export interface ActionState {
+  success: boolean;
+  message: string;
+}
+
+// Return structured objects
+if (error) return { success: false, message: error.message }
+return { success: true, message: '操作成功' }
+```
+
+#### Client Components
+```typescript
+const [error, setError] = useState<string | null>(null)
+const [success, setSuccess] = useState<string | null>(null)
+
+// Error display
+{error && (
+  <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-600">
+    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+    </svg>
+    {error}
+  </div>
+)}
+
+// Success display
+{success && (
+  <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+    <div className="flex items-center gap-3 text-green-800">
+      <Save className="h-5 w-5" />
+      <span>{success}</span>
+    </div>
+  </div>
+)}
+```
+
+### UI Component Patterns
+
+#### Modal/Dialog
+```typescript
+{isOpen && (
+  <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        <h3 className="font-bold text-slate-900">標題</h3>
+        <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600">
+          <X size={20} />
+        </button>
+      </div>
+      <div className="p-6">
+        {/* Content */}
+      </div>
+    </div>
+  </div>
+)}
+```
+
+#### Stat Card
+```typescript
+<div className="rounded-lg bg-white p-6 shadow">
+  <h3 className="text-sm font-medium text-gray-500">總用戶數</h3>
+  <p className="mt-2 text-3xl font-semibold text-gray-900">{count}</p>
+</div>
+```
+
+#### Badge/Tag
+```typescript
+<span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded uppercase">
+  {role === 'super_admin' ? '超級管理員' : '物管管理員'}
+</span>
+```
+
+## Development Guidelines
+
+### Creating New Pages
+
+1. **Determine Component Type**:
+   - Server Component for data fetching
+   - Client Component for interactivity
+
+2. **Add Route Protection** (if needed):
+   - Update `middleware.ts` matcher config
+   - Add role-based checks
+
+3. **Follow Layout Structure**:
+   ```typescript
+   // app/dashboard/new-page/page.tsx
+   export default async function NewPage() {
+     const supabase = await createClient()
+     // Fetch data
+     return (
+       <div className="max-w-4xl mx-auto">
+         {/* Content */}
+       </div>
+     )
+   }
+   ```
+
+4. **Add to Sidebar** (if needed):
+   ```typescript
+   // In Sidebar.tsx
+   <Link href="/dashboard/new-page" className="flex items-center gap-3 px-4 py-2 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-all">
+     <Icon size={20} />
+     <span>頁面名稱</span>
+   </Link>
+   ```
+
+### Adding New Server Actions
+
+1. **Define Return Type**:
+   ```typescript
+   export interface ActionState {
+     success: boolean;
+     message: string;
+   }
+   ```
+
+2. **Create Action Function**:
+   ```typescript
+   'use server'
+   
+   export async function newAction(formData: FormData): Promise<ActionState> {
+     // Validate input
+     const field = formData.get('fieldName') as string
+     if (!field) {
+       return { success: false, message: '欄位必填' }
+     }
+     
+     // Perform operation
+     const { error } = await supabaseAdmin.from('table').insert({ field })
+     
+     if (error) {
+       return { success: false, message: error.message }
+     }
+     
+     // Invalidate cache
+     revalidatePath('/relevant-path')
+     
+     return { success: true, message: '操作成功' }
+   }
+   ```
+
+### Database Operations
+
+#### Read Operations (Server Components)
+```typescript
+const { data, error } = await supabase
+  .from('profiles')
+  .select('*')
+  .eq('id', userId)
+  .single()
+```
+
+#### Write Operations (Server Actions)
+```typescript
+const { error } = await supabaseAdmin
+  .from('profiles')
+  .update({ name, company_name })
+  .eq('id', userId)
+```
+
+#### Delete Operations
+```typescript
+const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
+await supabaseAdmin.from('profiles').delete().eq('id', userId)
+```
+
+### Form Implementation Checklist
+
+1. **Create Server Action** in `actions.ts`
+2. **Create Client Component** with form
+3. **Use SubmitButton** for submit action
+4. **Implement Error Handling** with visual feedback
+5. **Add Loading States** with appropriate spinners
+6. **Validate Input** on both client and server
+7. **Add Success Feedback** with confirmation messages
+
+### Styling Best Practices
+
+1. **Use Tailwind Classes Consistently**:
+   - Colors: Stick to indigo primary, slate/grayscale
+   - Spacing: Use consistent padding (p-4, p-6, px-8)
+   - Typography: Use semantic heading levels
+
+2. **Responsive Design**:
+   - Mobile-first with progressive enhancement
+   - Test at `sm`, `md`, `lg` breakpoints
+
+3. **Interactive States**:
+   - Hover: `hover:bg-slate-800`, `hover:text-white`
+   - Focus: `focus:ring-2 focus:ring-indigo-500`
+   - Disabled: `disabled:bg-indigo-400`, `disabled:cursor-not-allowed`
+   - Transitions: `transition-all duration-200`
+
+4. **Accessibility**:
+   - Use semantic HTML (`<nav>`, `<main>`, `<header>`)
+   - Add proper labels to form inputs
+   - Include focus indicators
+   - Support reduced motion preferences
+
+## Environment Variables
+
+```env
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=             # Supabase project URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY=        # Supabase anonymous key
+SUPABASE_SERVICE_ROLE_KEY=            # Admin service role key (server only)
+
+# Application
+NEXT_PUBLIC_SITE_URL=                 # Application base URL
+```
+
+## Development Commands
+
+```bash
+npm run dev      # Start development server (http://localhost:3000)
+npm run build    # Build for production
+npm run start    # Start production server
+npm run lint     # Run ESLint
+```
+
+## Key Features
+
+1. **Authentication System**: Complete auth flow with Supabase Auth
+2. **Role-Based Access**: Super admin vs property admin permissions
+3. **Admin Management**: Invite, edit, delete admin users
+4. **Email Workflows**: Invitation emails, email change verification
+5. **Responsive Dashboard**: Sidebar navigation with mobile considerations
+6. **Type Safety**: Full TypeScript implementation with strict checking
+7. **Modern UI**: Clean, professional interface with Tailwind CSS
+8. **Internationalization**: Traditional Chinese UI with English codebase
+
+## Database Operations Reference
+
+### Auth Operations (supabaseAdmin)
+```typescript
+// Create user with password
+const { data: authUser, error } = await supabaseAdmin.auth.admin.createUser({
+  email,
+  password,
+  email_confirm: true,
+  user_metadata: { name, role, company_id, company_name }
+})
+
+// Invite user by email
+const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+  data: { name, role, company_id, company_name },
+  redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
+})
+
+// Delete user
+const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
+
+// Update user email
+const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { email: newEmail })
+```
+
+### Profile Operations
+```typescript
+// Insert profile
+const { error } = await supabaseAdmin.from('profiles').insert({
+  id: userId,
+  name,
+  role,
+  company_id,
+  company_name,
+  created_at: new Date().toISOString()
+})
+
+// Update profile
+const { error } = await supabaseAdmin
+  .from('profiles')
+  .update({ name, company_name, company_id })
+  .eq('id', userId)
+
+// Delete profile
+await supabaseAdmin.from('profiles').delete().eq('id', userId)
+
+// Select with count
+const { count } = await supabase
+  .from('profiles')
+  .select('*', { count: 'exact', head: true })
+```
+
+## Notes for AI Assistants
+
+### Critical Guidelines
+1. **Language Consistency**: UI text in Traditional Chinese, code comments in English
+2. **Component Type**: Default to Server Component unless interactivity is needed
+3. **Form Handling**: Always use `SubmitButton` component for submit actions
+4. **Database**: Use appropriate Supabase client (server/client/admin)
+5. **Auth**: Respect existing role-based access patterns
+6. **Error Handling**: Follow structured response pattern with user-friendly messages
+7. **Icons**: Use Lucide React icons consistently
+8. **Layout**: Maintain sidebar + header + main content structure
+
+### When Creating New Features
+
+#### New Page
+1. Create in appropriate directory under `app/dashboard/`
+2. Determine if Server or Client Component needed
+3. Add to Sidebar navigation if user-facing
+4. Add route protection in `middleware.ts` if needed
+5. Follow layout structure: max-width container with proper spacing
+
+#### New API/Action
+1. Prefer Server Actions over API routes
+2. Define `ActionState` interface for return type
+3. Place in `actions.ts` file near related pages
+4. Use `revalidatePath()` for cache invalidation
+5. Return structured response with `success` and `message`
+
+#### New Component
+1. Place in appropriate subdirectory:
+   - `components/ui/`: Generic reusable UI
+   - `components/admin/`: Admin-specific features
+   - `components/layout/`: Layout structure
+2. Define TypeScript interface for props
+3. Follow naming convention (PascalCase)
+4. Export as named or default export consistently
+
+### Common Mistakes to Avoid
+- Don't use `any` types - define proper interfaces
+- Don't create API routes when Server Actions suffice
+- Don't bypass middleware authentication checks
+- Don't mix English and Chinese in UI text
+- Don't forget to handle loading and error states
+- Don't hardcode colors - use Tailwind palette
+- Don't forget to invalidate cache after mutations
+- Don't use client-side Supabase in Server Components
+
+### Code Review Checklist
+- [ ] TypeScript types are properly defined
+- [ ] Server/Client Component boundaries are correct
+- [ ] Form uses SubmitButton component
+- [ ] Error handling is implemented
+- [ ] Loading states are provided
+- [ ] Responsive design is considered
+- [ ] Accessibility attributes are present
+- [ ] Cache invalidation is handled
+- [ ] UI text is in Traditional Chinese
+- [ ] Code comments are in English
