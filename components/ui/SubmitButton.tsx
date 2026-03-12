@@ -6,12 +6,14 @@ interface SubmitButtonProps {
   label: string
   loadingLabel?: string
   className?: string
+  disabled?: boolean
 }
 
 export function SubmitButton({ 
   label, 
   loadingLabel = '處理中...', 
-  className 
+  className,
+  disabled = false
 }: SubmitButtonProps) {
   const { pending } = useFormStatus()
 
@@ -23,7 +25,7 @@ export function SubmitButton({
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       className={finalStyle}
     >
       {pending ? (

@@ -1,27 +1,33 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { updatePropertyAdmin, sendEmailChangeLink } from '@/app/dashboard/admin/actions'
 import { DeleteButton } from './DeleteButton'
 import { FormattedDate } from '@/components/ui/FormattedDate'
 import { SubmitButton } from '@/components/ui/SubmitButton'
-import { User, Mail, Building2, Calendar, X } from 'lucide-react'
+import { CompanySelect, Company } from './CompanySelect'
+import { User, Mail, Building2, Calendar, X, Edit } from 'lucide-react'
 
 // 1. 定義 Admin 的資料結構，取代 any
 interface AdminProfile {
   id: string
   name: string
-  company_name: string
+  company_name?: string // 可選，因為現在從 companies 表 join
   company_id: string
   created_at: string
   role: string
   email: string
+  companies?: { // 從 companies 表 join 的資料
+    name: string
+  }
 }
 
 export function AdminTable({ initialAdmins }: { initialAdmins: AdminProfile[] }) {
   const [editingAdmin, setEditingAdmin] = useState<AdminProfile | null>(null)
   const [newEmail, setNewEmail] = useState<string>('')
   const [isSaving, setIsSaving] = useState(false)
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [companiesLoading, setCompaniesLoading] = useState(true)
 
   const handleEditSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -41,17 +47,47 @@ export function AdminTable({ initialAdmins }: { initialAdmins: AdminProfile[] })
     setIsSaving(false)
   }
 
+  // 獲取公司清單
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const response = await fetch('/api/companies')
+        if (response.ok) {
+          const data = await response.json()
+          setCompanies(data.companies || [])
+        }
+      } catch (error) {
+        console.error('Failed to fetch companies:', error)
+      } finally {
+        setCompaniesLoading(false)
+      }
+    }
+
+    fetchCompanies()
+  }, [])
+
   return (
     <>
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left">
+        <div className="overflow-x-auto">
+          <table className="w-full">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="px-6 py-4 text-sm font-semibold text-slate-600">管理員姓名</th>
-              <th className="px-6 py-4 text-sm font-semibold text-slate-600">所屬公司</th>
-              <th className="px-6 py-4 text-sm font-semibold text-slate-600">公司 ID</th>
-              <th className="px-6 py-4 text-sm font-semibold text-slate-600">建立時間</th>
-              <th className="px-6 py-4 text-sm font-semibold text-slate-600">操作</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                管理員姓名
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                所屬公司
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                公司 ID
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                建立時間
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
+                操作
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -72,7 +108,7 @@ export function AdminTable({ initialAdmins }: { initialAdmins: AdminProfile[] })
                 <td className="px-6 py-4 text-sm text-slate-900">
                   <div className="flex items-center gap-2">
                     <Building2 size={16} />
-                    {admin.company_name}
+                    {admin.companies?.name || admin.company_name || '未設定'}
                   </div>
                 </td>
                 <td className="px-6 py-4 text-sm">
@@ -87,12 +123,13 @@ export function AdminTable({ initialAdmins }: { initialAdmins: AdminProfile[] })
                   </div>
                 </td>
                 <td className="px-6 py-4 text-sm">
-                  <div className="flex gap-3">
-                    <button 
+                  <div className="flex items-center justify-end gap-2">
+                    <button
                       onClick={() => setEditingAdmin(admin)}
-                      className="text-indigo-600 hover:text-indigo-900 font-medium"
+                      className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                      title="編輯"
                     >
-                      編輯
+                      <Edit className="h-4 w-4" />
                     </button>
                     <DeleteButton adminId={admin.id} adminName={admin.name} />
                   </div>
@@ -101,6 +138,7 @@ export function AdminTable({ initialAdmins }: { initialAdmins: AdminProfile[] })
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* 編輯 Modal 彈窗 */}
@@ -153,12 +191,20 @@ export function AdminTable({ initialAdmins }: { initialAdmins: AdminProfile[] })
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">公司名稱</label>
-                <input name="company_name" defaultValue={editingAdmin.company_name} required className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">公司 ID (需唯一)</label>
-                <input name="company_id" defaultValue={editingAdmin.company_id} required className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" />
+                <label className="block text-sm font-medium text-slate-700 mb-1">物業公司</label>
+                {companiesLoading ? (
+                  <div className="w-full px-4 py-2 border rounded-lg bg-slate-100 text-slate-500">
+                    載入中...
+                  </div>
+                ) : (
+                  <CompanySelect companies={companies} />
+                )}
+                {/* 隱藏的公司名稱欄位，用於表單提交 */}
+                <input 
+                  type="hidden" 
+                  name="company_name" 
+                  required 
+                />
               </div>
               
               <div className="flex gap-3 pt-4">

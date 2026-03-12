@@ -23,7 +23,7 @@ export async function handleAdminAction(prevState: ActionState | null, formData:
       email,
       password,
       email_confirm: true,
-      user_metadata: { name, role: 'property_admin', company_id, company_name }
+      user_metadata: { name, role: 'property_admin', company_id }
     })
 
     if (authError) return { success: false, message: `建立失敗: ${authError.message}` }
@@ -37,7 +37,6 @@ export async function handleAdminAction(prevState: ActionState | null, formData:
           name: name,
           role: 'property_admin',
           company_id: company_id,
-          company_name: company_name,
           created_at: new Date().toISOString()
         })
 
@@ -82,12 +81,12 @@ export async function deletePropertyAdmin(adminId: string) {
 // 編輯管理員資訊
 export async function updatePropertyAdmin(adminId: string, formData: FormData) {
   const name = formData.get('name') as string
-  const company_name = formData.get('company_name') as string
   const company_id = formData.get('company_id') as string
+  // 注意：不再更新 company_name，因為該欄位已從 profiles 表移除
 
   const { error } = await supabaseAdmin
     .from('profiles')
-    .update({ name, company_name, company_id })
+    .update({ name, company_id })
     .eq('id', adminId)
 
   if (error) return { success: false, message: error.message }

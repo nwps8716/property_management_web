@@ -22,10 +22,10 @@ export function DeleteButton({ adminId, adminName }: { adminId: string, adminNam
     <button
       onClick={handleDelete}
       disabled={isDeleting}
-      className="text-red-500 hover:text-red-700 disabled:opacity-50 inline-flex items-center gap-1 text-sm font-medium"
+      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+      title="刪除"
     >
       {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-      刪除
     </button>
   )
 }

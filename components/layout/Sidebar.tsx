@@ -8,7 +8,8 @@ import {
   Building2, 
   Settings, 
   LogOut,
-  ShieldCheck
+  ShieldCheck,
+  Building
 } from 'lucide-react'
 
 export default async function Sidebar() {
@@ -49,6 +50,10 @@ export default async function Sidebar() {
             <Link href="/dashboard/admin/user" className="flex items-center gap-3 px-4 py-2 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-all">
               <Users size={20} />
               <span>管理員清單</span>
+            </Link>
+            <Link href="/dashboard/admin/companies" className="flex items-center gap-3 px-4 py-2 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-all">
+              <Building size={20} />
+              <span>物業公司管理</span>
             </Link>
             <Link href="/dashboard/admin/invite" className="flex items-center gap-3 px-4 py-2 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-all">
               <UserPlus size={20} />

@@ -1,4 +1,5 @@
 import { createClient } from '@/utils/supabase/server'
+import { supabaseAdmin } from '@/utils/supabase/admin'
 import { InviteForm } from '@/components/admin/InviteForm'
 import { redirect } from 'next/navigation'
 
@@ -17,6 +18,12 @@ export default async function InvitePage() {
     redirect('/dashboard')
   }
 
+  // 獲取物業公司清單
+  const { data: companies, error } = await supabaseAdmin
+    .from('companies')
+    .select('id, name')
+    .order('name')
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-8">
@@ -25,7 +32,7 @@ export default async function InvitePage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border p-8">
-        <InviteForm />
+        <InviteForm companies={companies || []} />
       </div>
     </div>
   )

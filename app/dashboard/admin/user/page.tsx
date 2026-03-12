@@ -16,7 +16,12 @@ export default async function AdminUsersPage() {
   const [profilesResponse, authResponse] = await Promise.all([
     supabaseAdmin
       .from('profiles')
-      .select('*')
+      .select(`
+        *,
+        companies:company_id (
+          name
+        )
+      `)
       .eq('role', 'property_admin')
       .order('created_at', { ascending: false }),
     supabaseAdmin.auth.admin.listUsers()
