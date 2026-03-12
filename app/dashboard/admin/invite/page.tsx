@@ -18,12 +18,6 @@ export default async function InvitePage() {
     redirect('/dashboard')
   }
 
-  // 獲取物業公司清單
-  const { data: companies, error } = await supabaseAdmin
-    .from('companies')
-    .select('id, name')
-    .order('name')
-
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-8">
@@ -32,7 +26,7 @@ export default async function InvitePage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border p-8">
-        <InviteForm companies={companies || []} />
+        <InviteForm />
       </div>
     </div>
   )

@@ -1,20 +1,44 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useActionState, useState, useEffect } from 'react'
 import { handleAdminAction } from '@/app/dashboard/admin/actions'
 import { Building, Hash, Key, Send, UserPlus, AlertTriangle } from 'lucide-react'
 import { SubmitButton } from '@/components/ui/SubmitButton'
 import { CompanySelect, Company } from './CompanySelect'
 
-interface InviteFormProps {
-  companies: Company[]
-}
-
-export function InviteForm({ companies }: InviteFormProps) {
+export function InviteForm() {
   const [mode, setMode] = useState<'invite' | 'create'>('invite')
   const [state, formAction] = useActionState(handleAdminAction, null)
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const response = await fetch('/api/companies')
+        if (response.ok) {
+          const data = await response.json()
+          setCompanies(data.companies || [])
+        }
+      } catch (error) {
+        console.error('Failed to fetch companies:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCompanies()
+  }, [])
 
   const hasCompanies = companies.length > 0
+
+  if (loading) {
+    return (
+      <div className="animate-pulse">
+        <div className="h-32 bg-slate-100 rounded"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
