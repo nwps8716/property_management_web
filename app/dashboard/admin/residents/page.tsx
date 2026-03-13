@@ -64,6 +64,16 @@ export default async function ResidentsPage({
     console.error('Errors:', { communitiesError, companiesError, residentsError })
   }
 
+  // Debug logging for super_admin
+  if (isSuperAdmin) {
+    console.log('[ResidentsPage] Super Admin Debug:', {
+      selectedCommunityId,
+      communitiesCount: communities?.length,
+      residentsCount: residents.length,
+      residentsError
+    })
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
       <ResidentTable

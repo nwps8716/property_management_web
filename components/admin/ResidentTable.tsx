@@ -35,11 +35,46 @@ export function ResidentTable({
 
   const isSuperAdmin = userRole === 'super_admin'
 
+  // Debug logging on component mount
+  console.log('[ResidentTable] Initial state:', {
+    isSuperAdmin,
+    totalResidents: residents.length,
+    communitiesCount: communities.length,
+    initialCommunityId,
+    selectedCommunityId
+  })
+
   // Handle community filter change
   const handleCommunityChange = (communityId: string) => {
+    console.log('[ResidentTable] Community filter changed:', { 
+      newCommunityId: communityId, 
+      totalResidents: residents.length,
+      previousCommunityId: selectedCommunityId,
+      isSuperAdmin
+    })
+    
     setSelectedCommunityId(communityId)
+    
+    // For super_admin: reload page with community parameter to fetch new data
+    if (isSuperAdmin) {
+      const url = new URL(window.location.href)
+      if (communityId) {
+        url.searchParams.set('community', communityId)
+      } else {
+        url.searchParams.delete('community')
+      }
+      window.location.href = url.toString()
+      return
+    }
+    
+    // For property_admin: filter existing data
     if (communityId) {
-      setFilteredResidents(residents.filter(r => r.community_id === communityId))
+      const filtered = residents.filter(r => r.community_id === communityId)
+      console.log('[ResidentTable] Filtered residents:', { 
+        filteredCount: filtered.length,
+        communityId 
+      })
+      setFilteredResidents(filtered)
     } else {
       setFilteredResidents(residents)
     }
@@ -106,7 +141,7 @@ export function ResidentTable({
             className="w-full sm:w-80 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
           >
             <option value="">
-              {isSuperAdmin ? '請選擇社區（顯示所有住戶）' : '顯示所有管理的社區'}
+              {isSuperAdmin ? '請選擇社區' : '顯示所有管理的社區'}
             </option>
             {communities.map((community) => (
               <option key={community.id} value={community.id}>
