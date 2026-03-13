@@ -1,7 +1,7 @@
 # Project Context: Property Management Web Application
 
 ## Project Overview
-This is a Next.js 16 property management web application built with TypeScript, featuring authentication, routing middleware, role-based access control (RBAC), and a modern UI with Tailwind CSS. The application uses Supabase for authentication, database, and authorization services.
+This is a Next.js 16 property management web application built with TypeScript, featuring authentication, routing middleware, role-based access control (RBAC), and a modern UI with Tailwind CSS. The application uses Supabase for authentication, database, and authorization services. Recently enhanced with unified company management, admin invitation system, and page transition animations.
 
 ## Technology Stack
 - **Framework**: Next.js 16.1.6 (App Router)
@@ -17,34 +17,46 @@ This is a Next.js 16 property management web application built with TypeScript, 
 ### Directory Structure
 ```
 app/                          # Next.js App Router pages
+├── api/                      # API routes
+│   └── companies/            # GET endpoint for company list
+│       └── route.ts
 ├── auth/                     # Authentication-related pages
 │   └── callback/
 ├── dashboard/                # Protected dashboard area
 │   ├── admin/                # Admin-specific functionality
 │   │   ├── actions.ts        # Server actions for admin operations
+│   │   ├── companies/        # Company management (super_admin only)
+│   │   │   ├── actions.ts    # CRUD operations for companies
+│   │   │   └── page.tsx
 │   │   ├── invite/           # Invite admin page
+│   │   │   └── page.tsx      # Uses InviteForm component
 │   │   └── user/             # User management page
 │   ├── set-password/         # Password setup for new users
 │   ├── layout.tsx            # Dashboard layout with sidebar
-│   ├── loading.tsx           # Loading UI
+│   ├── loading.tsx           # Loading UI with skeleton screens
 │   ├── page.tsx              # Dashboard home/overview
-│   └── settings/             # Personal settings (empty, needs implementation)
+│   └── settings/             # Personal settings
 ├── login/                    # Login page
 │   ├── actions.ts            # Login server action
 │   └── page.tsx              # Login form page
 ├── globals.css               # Global styles with Tailwind v4
-├── layout.tsx                # Root layout
+├── layout.tsx                # Root layout with PageTransitionProvider
+├── loading.tsx               # Global loading page with animation
+├── page-transitions.css      # CSS animations for page transitions
 └── page.tsx                  # Home page (redirects to login)
 
 components/                   # Reusable React components
 ├── admin/                    # Admin-specific components
-│   ├── AdminTable.tsx        # Data table with edit modal
-│   ├── DeleteButton.tsx      # Delete confirmation button
-│   └── InviteForm.tsx        # Admin invitation form
+│   ├── AdminTable.tsx        # Data table with edit/delete functionality
+│   ├── CompanySelect.tsx     # Company dropdown selector (reusable)
+│   ├── CompanyTable.tsx      # Company management table with CRUD
+│   ├── DeleteButton.tsx      # Delete confirmation button (icon-based)
+│   └── InviteForm.tsx        # Admin invitation form with self-fetching
 ├── layout/                   # Layout-related components
 │   └── Sidebar.tsx           # Navigation sidebar (async Server Component)
 └── ui/                       # Generic UI components
     ├── FormattedDate.tsx     # Date formatting component
+    ├── PageTransitionProvider.tsx  # Page transition animation wrapper
     └── SubmitButton.tsx      # Reusable submit button with loading state
 
 utils/                        # Utility functions
@@ -55,6 +67,21 @@ utils/                        # Utility functions
 
 middleware.ts                 # Route protection and session management
 ```
+
+## Recent Architecture Changes
+
+### Company Management Feature
+- **Unified Company Schema**: Companies now stored in separate `companies` table
+- **CompanySelect Component**: Reusable dropdown with automatic company name/id selection
+- **API Endpoint**: `/api/companies` for fetching company list across components
+- **AdminTable Integration**: Edit modal uses company dropdown instead of manual input
+- **InviteForm Integration**: Self-fetches company data via API
+
+### Page Transition System
+- **PageTransitionProvider**: Wraps all pages with fade-in/fade-out transitions
+- **Global Loading State**: `/app/loading.tsx` with dual-ring spinner animation
+- **Path-based Transitions**: Triggers on route changes with 150ms delay
+- **CSS Transitions**: Smooth opacity and translateY animations
 
 ## Code Style & Patterns
 
@@ -94,17 +121,28 @@ export default async function Component() {
 - Used for interactive UI elements
 - Handle form submissions with `useFormStatus()`
 - Manage local state with `useState()`
-- Access search params with `useSearchParams()`
+- Self-fetch data when needed (InviteForm pattern)
 
 ```typescript
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useFormStatus } from 'react-dom'
 
-export default function ClientComponent() {
-  const [error, setError] = useState<string | null>(null)
-  // ...
+// Self-fetching component pattern
+export function InviteForm() {
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [loading, setLoading] = useState(true)
+  
+  useEffect(() => {
+    fetch('/api/companies')
+      .then(res => res.json())
+      .then(data => setCompanies(data.companies))
+      .finally(() => setLoading(false))
+  }, [])
+  
+  if (loading) return <Skeleton />
+  return <FormUI companies={companies} />
 }
 ```
 
@@ -131,6 +169,77 @@ export async function actionName(formData: FormData): Promise<ActionState> {
 }
 ```
 
+### API Routes Pattern
+
+```typescript
+// app/api/companies/route.ts
+import { supabaseAdmin } from '@/utils/supabase/admin'
+import { NextResponse } from 'next/server'
+
+export async function GET() {
+  const { data: companies, error } = await supabaseAdmin
+    .from('companies')
+    .select('id, name')
+    .order('name')
+
+  if (error) {
+    return NextResponse.json(
+      { error: 'Failed to fetch companies' },
+      { status: 500 }
+    )
+  }
+
+  return NextResponse.json({ companies: companies || [] })
+}
+```
+
+### Page Transition Pattern
+
+```typescript
+// components/ui/PageTransitionProvider.tsx
+'use client'
+
+import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
+
+export function PageTransitionProvider({ children }) {
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  const pathname = usePathname()
+
+  useEffect(() => {
+    setIsTransitioning(true)
+    const timer = setTimeout(() => setIsTransitioning(false), 150)
+    return () => clearTimeout(timer)
+  }, [pathname])
+
+  return (
+    <div className={`transition-all duration-300 ease-in-out ${
+      isTransitioning 
+        ? 'opacity-0 transform translate-y-2' 
+        : 'opacity-100 transform translate-y-0'
+    }`}>
+      {children}
+    </div>
+  )
+}
+```
+
+### Loading States Pattern
+
+```typescript
+// Global loading page
+export default function Loading() {
+  return (
+    <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="relative">
+        <div className="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-t-indigo-400 rounded-full animate-spin" style={{ animationDelay: '0.15s' }}></div>
+      </div>
+    </div>
+  )
+}
+```
+
 ### Styling Conventions
 
 #### Color Palette
@@ -149,38 +258,24 @@ export async function actionName(formData: FormData): Promise<ActionState> {
 bg-white rounded-xl shadow-sm border border-slate-200
 ```
 
-**Buttons**:
+**Buttons (Icon-based for table actions)**:
 ```
-// Primary (Indigo)
+// Edit button
+p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors
+
+// Delete button
+p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors
+
+// Primary button
 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium
-
-// Secondary/Danger (Red)
-text-red-600 hover:text-red-900 font-medium
-
-// Text button
-px-4 py-2 text-indigo-600 hover:text-indigo-900 font-medium
 ```
 
-**Inputs**:
+**Table Headers**:
 ```
-block w-full rounded-lg border-gray-300 bg-gray-50 px-4 py-3 
-text-gray-900 focus:border-indigo-500 focus:ring-indigo-500 
-sm:text-sm transition-colors
+px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider
 ```
 
-**Tables**:
-```
-// Container
-bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden
-
-// Header
-bg-slate-50 border-b border-slate-200 px-6 py-4 text-sm font-semibold text-slate-600
-
-// Row
-hover:bg-slate-50 transition-colors divide-y divide-slate-200
-```
-
-#### Responsive Design
+**Responsive Design**:
 - Mobile-first approach
 - Common breakpoints: `sm:`, `md:`, `lg:`
 - Layout: `flex-col` mobile, `sm:flex-row` desktop
@@ -207,7 +302,7 @@ if (!user && !isAuthPage) {
 - **Admin**: `supabaseAdmin` for privileged operations
 
 #### 3. Role-Based Access Control
-- `super_admin`: Full system access, can manage other admins
+- `super_admin`: Full system access, can manage companies and admins
 - `property_admin`: Limited access to property management features
 - Role determined from `profiles` table
 
@@ -222,31 +317,23 @@ export async function actionName(formData: FormData): Promise<ActionState> {
 }
 ```
 
-#### Client-Side Form Wrapper
+#### Company Select Pattern
 ```typescript
-async function clientAction(formData: FormData) {
-  setError(null)
-  const result = await serverAction(formData)
-  if (result?.error) setError(result.error)
-}
+// CompanySelect handles both id and name
+<select name="company_id" onChange={handleChange}>
+  <option value="">請選擇物業公司</option>
+  {companies.map((company) => (
+    <option key={company.id} value={company.id}>
+      {company.name} ({company.id})
+    </option>
+  ))}
+</select>
+
+// Hidden input for company_name
+<input type="hidden" name="company_name" />
 ```
 
-#### SubmitButton Component Usage
-```typescript
-import { SubmitButton } from '@/components/ui/SubmitButton'
-
-// Basic usage
-<SubmitButton label="登入系統" loadingLabel="正在驗證身份..." />
-
-// With custom className
-<SubmitButton 
-  label="儲存變更"
-  loadingLabel="儲存中..."
-  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg"
-/>
-```
-
-### Database Schema (Inferred)
+### Database Schema (Current)
 
 **profiles table**:
 | Column | Type | Description |
@@ -254,9 +341,19 @@ import { SubmitButton } from '@/components/ui/SubmitButton'
 | id | UUID | References auth.users |
 | name | string | User's display name |
 | email | string | User's email address |
-| company_name | string | Organization name |
-| company_id | string | Organization identifier |
+| company_id | string | References companies.id |
 | role | string | 'super_admin' or 'property_admin' |
+| created_at | timestamp | Creation timestamp |
+| updated_at | timestamp | Last update timestamp |
+
+**companies table**:
+| Column | Type | Description |
+|--------|------|-------------|
+| id | string | Company unique identifier |
+| name | string | Company display name |
+| owner_name | string | Owner contact name |
+| contact_phone | string | Contact phone number |
+| contact_email | string | Contact email address |
 | created_at | timestamp | Creation timestamp |
 | updated_at | timestamp | Last update timestamp |
 
@@ -282,6 +379,8 @@ import { revalidatePath } from 'next/cache'
 // Components
 import { SubmitButton } from '@/components/ui/SubmitButton'
 import { AdminTable } from '@/components/admin/AdminTable'
+import { CompanySelect } from '@/components/admin/CompanySelect'
+import { PageTransitionProvider } from '@/components/ui/PageTransitionProvider'
 import Sidebar from '@/components/layout/Sidebar'
 
 // Utilities
@@ -354,19 +453,21 @@ const [success, setSuccess] = useState<string | null>(null)
 )}
 ```
 
-#### Stat Card
+#### Table with Loading Skeleton
 ```typescript
-<div className="rounded-lg bg-white p-6 shadow">
-  <h3 className="text-sm font-medium text-gray-500">總用戶數</h3>
-  <p className="mt-2 text-3xl font-semibold text-gray-900">{count}</p>
+// Skeleton loading pattern
+<div className="animate-pulse">
+  <div className="h-32 bg-slate-100 rounded"></div>
 </div>
-```
 
-#### Badge/Tag
-```typescript
-<span className="inline-block px-2 py-0.5 text-[10px] font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded uppercase">
-  {role === 'super_admin' ? '超級管理員' : '物管管理員'}
-</span>
+// Table container with overflow
+<div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+  <div className="overflow-x-auto">
+    <table className="w-full">
+      {/* Table content */}
+    </table>
+  </div>
+</div>
 ```
 
 ## Development Guidelines
@@ -376,10 +477,11 @@ const [success, setSuccess] = useState<string | null>(null)
 1. **Determine Component Type**:
    - Server Component for data fetching
    - Client Component for interactivity
+   - Or hybrid: Server Component fetching data, passing to Client Component
 
 2. **Add Route Protection** (if needed):
    - Update `middleware.ts` matcher config
-   - Add role-based checks
+   - Add role-based checks in page component
 
 3. **Follow Layout Structure**:
    ```typescript
@@ -439,6 +541,19 @@ const [success, setSuccess] = useState<string | null>(null)
    }
    ```
 
+### API Routes (When Server Actions Not Suitable)
+
+1. **Use for**: Client-side data fetching, third-party integrations
+2. **Location**: `app/api/endpoint/route.ts`
+3. **Pattern**:
+   ```typescript
+   export async function GET() {
+     const { data, error } = await supabaseAdmin.from('table').select()
+     if (error) return NextResponse.json({ error }, { status: 500 })
+     return NextResponse.json({ data })
+   }
+   ```
+
 ### Database Operations
 
 #### Read Operations (Server Components)
@@ -454,7 +569,7 @@ const { data, error } = await supabase
 ```typescript
 const { error } = await supabaseAdmin
   .from('profiles')
-  .update({ name, company_name })
+  .update({ name, company_id })
   .eq('id', userId)
 ```
 
@@ -522,12 +637,15 @@ npm run lint     # Run ESLint
 
 1. **Authentication System**: Complete auth flow with Supabase Auth
 2. **Role-Based Access**: Super admin vs property admin permissions
-3. **Admin Management**: Invite, edit, delete admin users
-4. **Email Workflows**: Invitation emails, email change verification
-5. **Responsive Dashboard**: Sidebar navigation with mobile considerations
-6. **Type Safety**: Full TypeScript implementation with strict checking
-7. **Modern UI**: Clean, professional interface with Tailwind CSS
-8. **Internationalization**: Traditional Chinese UI with English codebase
+3. **Company Management**: CRUD operations for property companies (super_admin only)
+4. **Admin Management**: Invite, edit, delete admin users with company assignment
+5. **Unified Company Selection**: Dropdown selector across invite and edit flows
+6. **Page Transitions**: Smooth loading animations between page navigation
+7. **Email Workflows**: Invitation emails, email change verification
+8. **Responsive Dashboard**: Sidebar navigation with mobile considerations
+9. **Type Safety**: Full TypeScript implementation with strict checking
+10. **Modern UI**: Clean, professional interface with Tailwind CSS
+11. **Internationalization**: Traditional Chinese UI with English codebase
 
 ## Database Operations Reference
 
@@ -554,31 +672,33 @@ const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
 const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { email: newEmail })
 ```
 
-### Profile Operations
+### Company Operations
 ```typescript
-// Insert profile
-const { error } = await supabaseAdmin.from('profiles').insert({
-  id: userId,
-  name,
-  role,
-  company_id,
-  company_name,
-  created_at: new Date().toISOString()
+// Insert company
+const { error } = await supabaseAdmin.from('companies').insert({
+  id: companyId,
+  name: companyName,
+  owner_name: ownerName,
+  contact_phone: phone,
+  contact_email: email
 })
 
-// Update profile
+// Update company
 const { error } = await supabaseAdmin
-  .from('profiles')
-  .update({ name, company_name, company_id })
-  .eq('id', userId)
+  .from('companies')
+  .update({ name, owner_name, contact_phone, contact_email })
+  .eq('id', companyId)
 
-// Delete profile
-await supabaseAdmin.from('profiles').delete().eq('id', userId)
-
-// Select with count
-const { count } = await supabase
+// Select with join (for admin list)
+const { data } = await supabaseAdmin
   .from('profiles')
-  .select('*', { count: 'exact', head: true })
+  .select(`
+    *,
+    companies:company_id (
+      name
+    )
+  `)
+  .eq('role', 'property_admin')
 ```
 
 ## Notes for AI Assistants
@@ -592,6 +712,8 @@ const { count } = await supabase
 6. **Error Handling**: Follow structured response pattern with user-friendly messages
 7. **Icons**: Use Lucide React icons consistently
 8. **Layout**: Maintain sidebar + header + main content structure
+9. **Company Data**: Use CompanySelect component for company selection
+10. **API Reuse**: Prefer Server Actions, use API routes for client-side fetching
 
 ### When Creating New Features
 
@@ -617,6 +739,7 @@ const { count } = await supabase
 2. Define TypeScript interface for props
 3. Follow naming convention (PascalCase)
 4. Export as named or default export consistently
+5. Consider if component needs to self-fetch data
 
 ### Common Mistakes to Avoid
 - Don't use `any` types - define proper interfaces
@@ -627,6 +750,7 @@ const { count } = await supabase
 - Don't hardcode colors - use Tailwind palette
 - Don't forget to invalidate cache after mutations
 - Don't use client-side Supabase in Server Components
+- Don't forget to remove company_name from profiles operations (now in companies table)
 
 ### Code Review Checklist
 - [ ] TypeScript types are properly defined
@@ -639,3 +763,5 @@ const { count } = await supabase
 - [ ] Cache invalidation is handled
 - [ ] UI text is in Traditional Chinese
 - [ ] Code comments are in English
+- [ ] Company selection uses CompanySelect component
+- [ ] API routes follow RESTful patterns (if applicable)
