@@ -28,8 +28,14 @@ app/                          # Next.js App Router pages
 │   │   ├── companies/        # Company management (super_admin only)
 │   │   │   ├── actions.ts    # CRUD operations for companies
 │   │   │   └── page.tsx
+│   │   ├── communities/      # Community management
+│   │   │   ├── actions.ts    # CRUD operations for communities
+│   │   │   └── page.tsx
 │   │   ├── invite/           # Invite admin page
 │   │   │   └── page.tsx      # Uses InviteForm component
+│   │   ├── residents/        # Resident management (住戶管理)
+│   │   │   ├── actions.ts    # CRUD operations for residents
+│   │   │   └── page.tsx
 │   │   └── user/             # User management page
 │   ├── set-password/         # Password setup for new users
 │   ├── layout.tsx            # Dashboard layout with sidebar
@@ -53,7 +59,9 @@ components/                   # Reusable React components
 │   ├── CompanySelect.tsx     # Company dropdown selector (reusable)
 │   ├── CompanyTable.tsx      # Company management table with CRUD
 │   ├── DeleteButton.tsx      # Delete confirmation button (icon-based)
-│   └── InviteForm.tsx        # Admin invitation form with self-fetching
+│   ├── InviteForm.tsx        # Admin invitation form with self-fetching
+│   ├── ResidentForm.tsx      # Resident creation/editing form with phone formatting
+│   └── ResidentTable.tsx     # Resident management table with community filter
 ├── layout/                   # Layout-related components
 │   └── Sidebar.tsx           # Navigation sidebar (async Server Component)
 └── ui/                       # Generic UI components
@@ -71,6 +79,15 @@ middleware.ts                 # Route protection and session management
 ```
 
 ## Recent Architecture Changes
+
+### Resident Management Feature (住戶管理)
+- **Database Schema**: Multi-table architecture with profiles, resident_details, and auth.users integration
+- **Role-Based Access**: Both super_admin and property_admin must select community before viewing residents
+- **Community-First Loading**: No residents loaded until community is selected (performance optimization)
+- **Taiwan Phone Formatting**: Automatic conversion to E.164 format (+886XXXXXXXX)
+- **Resident Details**: Extended information (building, floor, unit_number, parking_space)
+- **Permission Control**: property_admin can only manage residents in their company's communities
+- **Search Parameter**: URL-based community selection (`?community=xxx`) for shareable links
 
 ### Community Management Feature
 - **Database Schema**: Communities table with id, name, facilities (JSONB), invite_code, company_id
@@ -344,15 +361,33 @@ export async function actionName(formData: FormData): Promise<ActionState> {
 
 ### Database Schema (Current)
 
+**auth.users table** (Supabase Auth):
+| Column | Type | Description |
+|--------|------|-------------|
+| id | UUID | Primary key, auto-generated |
+| email | string | User's email address |
+| phone | string | E.164 formatted phone number |
+| user_metadata | JSONB | { name, role, community_id, company_id } |
+
 **profiles table**:
 | Column | Type | Description |
 |--------|------|-------------|
-| id | UUID | References auth.users |
+| id | UUID | References auth.users (primary key) |
 | name | string | User's display name |
-| email | string | User's email address |
+| community_id | UUID | References communities.id |
 | company_id | string | References companies.id |
-| role | string | 'super_admin' or 'property_admin' |
+| role | string | 'super_admin', 'property_admin', 'resident' |
 | created_at | timestamp | Creation timestamp |
+| updated_at | timestamp | Last update timestamp |
+
+**resident_details table**:
+| Column | Type | Description |
+|--------|------|-------------|
+| profile_id | UUID | References profiles.id (primary key) |
+| building | string | Building name/number |
+| floor | string | Floor number |
+| unit_number | string | Unit/apartment number |
+| parking_space | string | Parking space identifier |
 | updated_at | timestamp | Last update timestamp |
 
 **companies table**:
@@ -659,14 +694,17 @@ npm run lint     # Run ESLint
 2. **Role-Based Access**: Super admin vs property admin permissions
 3. **Company Management**: CRUD operations for property companies (super_admin only)
 4. **Community Management**: CRUD operations for communities with role-based access
-5. **Admin Management**: Invite, edit, delete admin users with company assignment
-5. **Unified Company Selection**: Dropdown selector across invite and edit flows
-6. **Page Transitions**: Smooth loading animations between page navigation
-7. **Email Workflows**: Invitation emails, email change verification
-8. **Responsive Dashboard**: Sidebar navigation with mobile considerations
-9. **Type Safety**: Full TypeScript implementation with strict checking
-10. **Modern UI**: Clean, professional interface with Tailwind CSS
-11. **Internationalization**: Traditional Chinese UI with English codebase
+5. **Resident Management**: CRUD operations for residents with community-based loading
+6. **Admin Management**: Invite, edit, delete admin users with company assignment
+7. **Unified Company Selection**: Dropdown selector across invite and edit flows
+8. **Page Transitions**: Smooth loading animations between page navigation
+9. **Email Workflows**: Invitation emails, email change verification
+10. **Responsive Dashboard**: Sidebar navigation with mobile considerations
+11. **Type Safety**: Full TypeScript implementation with strict checking
+12. **Modern UI**: Clean, professional interface with Tailwind CSS
+13. **Internationalization**: Traditional Chinese UI with English codebase
+14. **Phone Formatting**: Automatic Taiwan phone number E.164 conversion
+15. **Performance**: Community-first loading strategy for large datasets
 
 ## Database Operations Reference
 
@@ -691,6 +729,59 @@ const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
 
 // Update user email
 const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { email: newEmail })
+```
+
+### Resident Operations
+```typescript
+// Get residents with community filter
+const { data: residents, error } = await supabaseAdmin
+  .from('profiles')
+  .select(`
+    id, name, community_id, company_id, role,
+    resident_details (building, floor, unit_number, parking_space),
+    communities (id, name, company_id)
+  `)
+  .eq('role', 'resident')
+  .eq('community_id', selectedCommunityId)
+
+// Create resident - multi-step process
+// 1. Create auth user
+const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+  email,
+  password,
+  email_confirm: true,
+  phone: formattedPhone, // E.164 format
+  user_metadata: { name, role: 'resident', community_id, company_id }
+})
+
+// 2. Create profile
+const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
+  id: authUser.user.id,
+  name,
+  community_id,
+  company_id,
+  role: 'resident'
+})
+
+// 3. Create resident details
+const { error: detailsError } = await supabaseAdmin.from('resident_details').insert({
+  profile_id: authUser.user.id,
+  building: building || null,
+  floor: floor || null,
+  unit_number: unit_number || null,
+  parking_space: parking_space || null
+})
+
+// Update resident
+const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+  email: newEmail, // Email can only be changed by admin
+  user_metadata: { name, community_id }
+})
+
+// Delete resident - cascade delete
+await supabaseAdmin.auth.admin.deleteUser(userId)
+await supabaseAdmin.from('profiles').delete().eq('id', userId)
+await supabaseAdmin.from('resident_details').delete().eq('profile_id', userId)
 ```
 
 ### Company Operations
@@ -751,6 +842,11 @@ const { data } = await supabaseAdmin
 10. **API Reuse**: Prefer Server Actions, use API routes for client-side fetching
 11. **Role-Based Access**: Always check user role and company_id permissions
 12. **Community Management**: Auto-generate invite_code, validate company_id permissions
+13. **Resident Management**: 
+    - Must select community before viewing residents (performance optimization)
+    - Phone numbers stored in E.164 format (+886XXXXXXXX)
+    - Three-step creation: auth user → profile → resident_details
+    - Use URL parameter `?community=xxx` for community selection
 
 ### When Creating New Features
 
