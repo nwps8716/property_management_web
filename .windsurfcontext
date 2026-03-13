@@ -48,6 +48,8 @@ app/                          # Next.js App Router pages
 components/                   # Reusable React components
 ├── admin/                    # Admin-specific components
 │   ├── AdminTable.tsx        # Data table with edit/delete functionality
+│   ├── CommunityForm.tsx     # Community creation/editing form with role-based permissions
+│   ├── CommunityTable.tsx    # Community management table with CRUD operations
 │   ├── CompanySelect.tsx     # Company dropdown selector (reusable)
 │   ├── CompanyTable.tsx      # Company management table with CRUD
 │   ├── DeleteButton.tsx      # Delete confirmation button (icon-based)
@@ -69,6 +71,13 @@ middleware.ts                 # Route protection and session management
 ```
 
 ## Recent Architecture Changes
+
+### Community Management Feature
+- **Database Schema**: Communities table with id, name, facilities (JSONB), invite_code, company_id
+- **Role-Based Access**: super_admin manages all communities, property_admin manages own company's communities only
+- **Auto-Generated Invite Code**: 8-character alphanumeric code generated on creation
+- **Facilities Management**: Dynamic tag-based facility input with add/remove functionality
+- **Company Association**: Each community belongs to one company via company_id foreign key
 
 ### Company Management Feature
 - **Unified Company Schema**: Companies now stored in separate `companies` table
@@ -357,6 +366,17 @@ export async function actionName(formData: FormData): Promise<ActionState> {
 | created_at | timestamp | Creation timestamp |
 | updated_at | timestamp | Last update timestamp |
 
+**communities table**:
+| Column | Type | Description |
+|--------|------|-------------|
+| id | UUID | Primary key, auto-generated |
+| name | string | Community name |
+| facilities | JSONB | Array of facility names |
+| invite_code | string | Unique 8-char registration code |
+| company_id | string | References companies.id |
+| created_at | timestamp | Creation timestamp |
+| updated_at | timestamp | Last update timestamp |
+
 ### File Naming Conventions
 - **PascalCase**: React components (`AdminTable.tsx`, `SubmitButton.tsx`)
 - **kebab-case**: Directories and utility files (`set-password/`, `server.ts`)
@@ -638,7 +658,8 @@ npm run lint     # Run ESLint
 1. **Authentication System**: Complete auth flow with Supabase Auth
 2. **Role-Based Access**: Super admin vs property admin permissions
 3. **Company Management**: CRUD operations for property companies (super_admin only)
-4. **Admin Management**: Invite, edit, delete admin users with company assignment
+4. **Community Management**: CRUD operations for communities with role-based access
+5. **Admin Management**: Invite, edit, delete admin users with company assignment
 5. **Unified Company Selection**: Dropdown selector across invite and edit flows
 6. **Page Transitions**: Smooth loading animations between page navigation
 7. **Email Workflows**: Invitation emails, email change verification
@@ -689,16 +710,30 @@ const { error } = await supabaseAdmin
   .update({ name, owner_name, contact_phone, contact_email })
   .eq('id', companyId)
 
-// Select with join (for admin list)
+// Community operations
+const { error } = await supabaseAdmin.from('communities').insert({
+  name,
+  facilities: ['游泳池', '健身房'],
+  invite_code: 'ABC12345',
+  company_id: companyId
+})
+
+// Update community
+const { error } = await supabaseAdmin
+  .from('communities')
+  .update({ name, facilities, company_id })
+  .eq('id', communityId)
+
+// Select with company join
 const { data } = await supabaseAdmin
-  .from('profiles')
+  .from('communities')
   .select(`
     *,
     companies:company_id (
       name
     )
   `)
-  .eq('role', 'property_admin')
+  .eq('company_id', userCompanyId)
 ```
 
 ## Notes for AI Assistants
@@ -714,6 +749,8 @@ const { data } = await supabaseAdmin
 8. **Layout**: Maintain sidebar + header + main content structure
 9. **Company Data**: Use CompanySelect component for company selection
 10. **API Reuse**: Prefer Server Actions, use API routes for client-side fetching
+11. **Role-Based Access**: Always check user role and company_id permissions
+12. **Community Management**: Auto-generate invite_code, validate company_id permissions
 
 ### When Creating New Features
 

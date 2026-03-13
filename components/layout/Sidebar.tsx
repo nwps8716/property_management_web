@@ -9,7 +9,8 @@ import {
   Settings, 
   LogOut,
   ShieldCheck,
-  Building
+  Building,
+  Home
 } from 'lucide-react'
 
 export default async function Sidebar() {
@@ -41,6 +42,11 @@ export default async function Sidebar() {
         <Link href="/dashboard" className="flex items-center gap-3 px-4 py-2 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-all">
           <LayoutDashboard size={20} />
           <span>儀表板</span>
+        </Link>
+
+        <Link href="/dashboard/admin/communities" className="flex items-center gap-3 px-4 py-2 text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-all">
+          <Home size={20} />
+          <span>社區管理</span>
         </Link>
 
         {/* 只有超級管理員看得到的選單 */}
