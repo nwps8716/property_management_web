@@ -166,18 +166,16 @@ export async function getResidents(communityId?: string): Promise<{ residents: R
   // Fetch email from auth.users for each resident
   const residentsWithEmail: Resident[] = []
   for (const resident of residents || []) {
+    // Supabase returns resident_details and communities as arrays, extract first element or null
+    const residentDetails = Array.isArray(resident.resident_details) 
+      ? resident.resident_details[0] || null 
+      : resident.resident_details
+    const communities = Array.isArray(resident.communities)
+      ? resident.communities[0] || null
+      : resident.communities
+    
     try {
-      const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(resident.id)
-      if (userError) {
-        console.error(`[getResidents] Error fetching user ${resident.id}:`, userError)
-      }
-      // Supabase returns resident_details and communities as arrays, extract first element or null
-      const residentDetails = Array.isArray(resident.resident_details) 
-        ? resident.resident_details[0] || null 
-        : resident.resident_details
-      const communities = Array.isArray(resident.communities)
-        ? resident.communities[0] || null
-        : resident.communities
+      const { data: userData } = await supabaseAdmin.auth.admin.getUserById(resident.id)
       
       residentsWithEmail.push({
         ...resident,
@@ -186,15 +184,7 @@ export async function getResidents(communityId?: string): Promise<{ residents: R
         resident_details: residentDetails,
         communities
       })
-    } catch (err) {
-      console.error(`[getResidents] Exception fetching user ${resident.id}:`, err)
-      const residentDetails = Array.isArray(resident.resident_details) 
-        ? resident.resident_details[0] || null 
-        : resident.resident_details
-      const communities = Array.isArray(resident.communities)
-        ? resident.communities[0] || null
-        : resident.communities
-      
+    } catch {
       residentsWithEmail.push({
         ...resident,
         email: '',
@@ -272,8 +262,6 @@ export async function createResident(
     const unit_number = formData.get('unit_number') as string
     const parking_space = formData.get('parking_space') as string
     
-    console.log('[createResident] Form data:', { name, email, community_id, company_id, hasPassword: !!password, phone })
-    
     // Validation - basic info all required except phone and resident details
     if (!name || !email || !password || !community_id || !company_id) {
       return { success: false, message: '姓名、電子郵件、密碼、社區和物業公司為必填欄位' }
@@ -308,8 +296,6 @@ export async function createResident(
     }
     
     // Create auth user
-    console.log('[createResident] Creating auth user...')
-    
     // Build auth user data - phone is optional and must be E.164 format
     const authUserData: any = {
       email,
@@ -326,13 +312,11 @@ export async function createResident(
     // Use formatted Taiwan phone number
     if (formattedPhone) {
       authUserData.phone = formattedPhone
-      console.log('[createResident] Using formatted phone:', formattedPhone)
     }
     
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser(authUserData)
     
     if (authError) {
-      console.error('[createResident] Auth error:', authError)
       if (authError.message.includes('already registered')) {
         return { success: false, message: '此電子郵件已被註冊' }
       }
@@ -343,10 +327,7 @@ export async function createResident(
       return { success: false, message: '創建用戶失敗 - 無用戶資料返回' }
     }
     
-    console.log('[createResident] Auth user created:', authUser.user.id)
-    
     // Manually create profile (don't rely on trigger - it may not be set up)
-    console.log('[createResident] Creating profile manually...')
     const { error: insertProfileError } = await supabaseAdmin
       .from('profiles')
       .upsert({
@@ -360,11 +341,8 @@ export async function createResident(
       }, { onConflict: 'id' })
     
     if (insertProfileError) {
-      console.error('[createResident] Profile insert error:', insertProfileError)
       return { success: false, message: `Profile 創建錯誤: ${insertProfileError.message}` }
     }
-    
-    console.log('[createResident] Profile created, creating resident_details...')
     
     // Create resident_details immediately after profile is created
     const residentDetailsData = {
@@ -376,25 +354,18 @@ export async function createResident(
       updated_at: new Date().toISOString()
     }
     
-    console.log('[createResident] Inserting resident_details:', residentDetailsData)
-    
     const { error: detailsError, data: detailsData } = await supabaseAdmin
       .from('resident_details')
       .insert(residentDetailsData)
       .select()
     
     if (detailsError) {
-      console.error('[createResident] Resident_details error:', detailsError)
       return { success: false, message: `Resident_details 錯誤: ${detailsError.message}` }
     }
-    
-    console.log('[createResident] Success! Resident created:', authUser.user.id)
-    console.log('[createResident] Details created:', detailsData)
     
     revalidatePath('/dashboard/admin/residents')
     return { success: true, message: '住戶創建成功' }
   } catch (error: any) {
-    console.error('[createResident] Unexpected error:', error)
     return { success: false, message: `創建住戶時發生錯誤: ${error?.message || '未知錯誤'}` }
   }
 }

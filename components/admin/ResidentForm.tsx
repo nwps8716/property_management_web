@@ -41,6 +41,9 @@ export function ResidentForm({
   useEffect(() => {
     if (state?.success) {
       onSuccess()
+    } else if (state?.success === false) {
+      // Show error alert for debugging
+      alert(`操作失敗：${state.message}`)
     }
   }, [state, onSuccess])
 
@@ -57,14 +60,7 @@ export function ResidentForm({
 
   return (
     <form 
-      action={(formData) => {
-        // Debug: log all form data
-        console.log('[ResidentForm] Submitting form data:')
-        for (const [key, value] of formData.entries()) {
-          console.log(`  ${key}: ${value}`)
-        }
-        formAction(formData)
-      }} 
+      action={formAction}
       className="space-y-5"
     >
       {/* Hidden field for resident ID in edit mode */}

@@ -52,6 +52,10 @@ export function ResidentTable({
     if (result.success) {
       setDeleteConfirmId(null)
       window.location.reload()
+    } else {
+      // Show error alert for debugging
+      alert(`刪除失敗：${result.message}`)
+      setDeleteConfirmId(null)
     }
   }
 
