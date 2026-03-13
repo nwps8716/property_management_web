@@ -54,24 +54,17 @@ export default async function ResidentsPage({
     }
     // If no community selected, residents stays empty
   } else {
-    // property_admin: fetch all residents for their communities
-    const result = await getResidents()
-    residents = result.residents || []
-    residentsError = result.error
+    // property_admin: also require community selection
+    if (selectedCommunityId) {
+      const result = await getResidents(selectedCommunityId)
+      residents = result.residents || []
+      residentsError = result.error
+    }
+    // If no community selected, residents stays empty
   }
 
   if (communitiesError || companiesError || residentsError) {
     console.error('Errors:', { communitiesError, companiesError, residentsError })
-  }
-
-  // Debug logging for super_admin
-  if (isSuperAdmin) {
-    console.log('[ResidentsPage] Super Admin Debug:', {
-      selectedCommunityId,
-      communitiesCount: communities?.length,
-      residentsCount: residents.length,
-      residentsError
-    })
   }
 
   return (

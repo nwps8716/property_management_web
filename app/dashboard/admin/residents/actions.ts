@@ -93,19 +93,14 @@ export async function getCommunitiesForUser(): Promise<{ communities: Community[
 
 // Get residents based on user role and selected community
 export async function getResidents(communityId?: string): Promise<{ residents: Resident[] | null; error?: string }> {
-  console.log('[getResidents] Called with communityId:', communityId)
-  
   const currentUser = await getCurrentUser()
   
   if (!currentUser) {
-    console.log('[getResidents] No current user')
     return { residents: null, error: '未登入' }
   }
   
   const { profile } = currentUser
   const isSuperAdmin = profile?.role === 'super_admin'
-  
-  console.log('[getResidents] User profile:', { role: profile?.role, company_id: profile?.company_id, isSuperAdmin })
   
   // Build the base query with resident_details join
   // Note: profiles table doesn't have email column, email is in auth.users
@@ -164,14 +159,7 @@ export async function getResidents(communityId?: string): Promise<{ residents: R
   
   const { data: residents, error } = await query
   
-  console.log('[getResidents] Query result:', { 
-    residentsCount: residents?.length || 0, 
-    error: error?.message,
-    communityId 
-  })
-  
   if (error) {
-    console.error('[getResidents] Database error:', error)
     return { residents: null, error: error.message }
   }
   

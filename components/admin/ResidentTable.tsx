@@ -35,49 +35,19 @@ export function ResidentTable({
 
   const isSuperAdmin = userRole === 'super_admin'
 
-  // Debug logging on component mount
-  console.log('[ResidentTable] Initial state:', {
-    isSuperAdmin,
-    totalResidents: residents.length,
-    communitiesCount: communities.length,
-    initialCommunityId,
-    selectedCommunityId
-  })
-
   // Handle community filter change
   const handleCommunityChange = (communityId: string) => {
-    console.log('[ResidentTable] Community filter changed:', { 
-      newCommunityId: communityId, 
-      totalResidents: residents.length,
-      previousCommunityId: selectedCommunityId,
-      isSuperAdmin
-    })
-    
     setSelectedCommunityId(communityId)
     
-    // For super_admin: reload page with community parameter to fetch new data
-    if (isSuperAdmin) {
-      const url = new URL(window.location.href)
-      if (communityId) {
-        url.searchParams.set('community', communityId)
-      } else {
-        url.searchParams.delete('community')
-      }
-      window.location.href = url.toString()
-      return
-    }
-    
-    // For property_admin: filter existing data
+    // For both super_admin and property_admin: reload page with community parameter to fetch new data
+    const url = new URL(window.location.href)
     if (communityId) {
-      const filtered = residents.filter(r => r.community_id === communityId)
-      console.log('[ResidentTable] Filtered residents:', { 
-        filteredCount: filtered.length,
-        communityId 
-      })
-      setFilteredResidents(filtered)
+      url.searchParams.set('community', communityId)
     } else {
-      setFilteredResidents(residents)
+      url.searchParams.delete('community')
     }
+    window.location.href = url.toString()
+    return
   }
 
   const handleDelete = async (id: string) => {
@@ -133,7 +103,7 @@ export function ResidentTable({
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
           <label className="block text-sm font-medium text-slate-700 mb-2">
             <Home className="inline w-4 h-4 mr-1" />
-            {isSuperAdmin ? '選擇社區查看住戶' : '篩選社區'}
+            選擇社區查看住戶
           </label>
           <select
             value={selectedCommunityId}
@@ -141,7 +111,7 @@ export function ResidentTable({
             className="w-full sm:w-80 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
           >
             <option value="">
-              {isSuperAdmin ? '請選擇社區' : '顯示所有管理的社區'}
+              請選擇社區
             </option>
             {communities.map((community) => (
               <option key={community.id} value={community.id}>
