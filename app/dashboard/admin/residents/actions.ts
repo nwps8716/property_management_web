@@ -77,7 +77,7 @@ export async function getCommunitiesForUser(): Promise<{ communities: Community[
     `)
     .order('name')
   
-  // property_admin can only see their company's communities
+  // property_admin and community_manager can only see their company's communities
   if (!isSuperAdmin && profile?.company_id) {
     query = query.eq('company_id', profile.company_id)
   }
@@ -135,7 +135,7 @@ export async function getResidents(communityId?: string): Promise<{ residents: R
       query = query.eq('community_id', communityId)
     }
   } else {
-    // property_admin: get all communities for their company
+    // property_admin and community_manager: get all communities for their company
     const { data: companyCommunities } = await supabaseAdmin
       .from('communities')
       .select('id')
@@ -276,7 +276,7 @@ export async function createResident(
       }
     }
     
-    // Check permission for property_admin
+    // Check permission for property_admin and community_manager
     if (!isSuperAdmin) {
       // Check if community belongs to user's company
       const { data: community } = await supabaseAdmin
@@ -289,7 +289,7 @@ export async function createResident(
         return { success: false, message: '無權限為此社區新增住戶' }
       }
       
-      // property_admin can only use their own company
+      // property_admin and community_manager can only use their own company
       if (company_id && company_id !== profile?.company_id) {
         return { success: false, message: '無權限使用此物業公司' }
       }

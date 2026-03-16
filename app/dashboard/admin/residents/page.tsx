@@ -26,8 +26,8 @@ export default async function ResidentsPage({
     redirect('/dashboard')
   }
 
-  // Only super_admin and property_admin can access
-  if (profile.role !== 'super_admin' && profile.role !== 'property_admin') {
+  // Only super_admin, property_admin, and community_manager can access
+  if (profile.role !== 'super_admin' && profile.role !== 'property_admin' && profile.role !== 'community_manager') {
     redirect('/dashboard')
   }
 
